@@ -5,6 +5,7 @@ import { FiCalendar, FiUser } from 'react-icons/fi';
 import { format } from 'date-fns';
 import ptBR from 'date-fns/locale/pt-BR';
 
+import { useCallback, useState } from 'react';
 import { getPrismicClient } from '../services/prismic';
 
 import commonStyles from '../styles/common.module.scss';
@@ -29,19 +30,34 @@ interface HomeProps {
   postsPagination: PostPagination;
 }
 
-export default function Home({
-  postsPagination: { next_page, results },
-}: HomeProps): JSX.Element {
+export default function Home({ postsPagination }: HomeProps): JSX.Element {
+  const [posts, setPosts] = useState<PostPagination>(postsPagination);
+
+  const loadMorePosts = useCallback(async () => {
+    const data = await fetch(posts.next_page).then(response => response.json());
+
+    const results = data.results.map(post => ({
+      uid: post.uid,
+      first_publication_date: post.first_publication_date,
+      data: {
+        title: post.data.title,
+        subtitle: post.data.subtitle,
+        author: post.data.author,
+      },
+    }));
+
+    setPosts({
+      results: [...posts.results, ...results],
+      next_page: data.next_page ?? '',
+    });
+  }, [posts]);
+
   return (
     <main className={commonStyles.container}>
-      <img
-        src="/images/logo.svg"
-        alt="spacetraveling"
-        className={commonStyles.logo}
-      />
+      <img src="/images/logo.svg" alt="logo" className={commonStyles.logo} />
 
       <div className={styles.posts}>
-        {results.map(post => (
+        {posts.results.map(post => (
           <Link href={`/post/${post.uid}`} key={post.uid}>
             <a>
               <strong>{post.data.title}</strong>
@@ -49,7 +65,13 @@ export default function Home({
               <div>
                 <time>
                   <FiCalendar />
-                  {post.first_publication_date}
+                  {format(
+                    new Date(post.first_publication_date),
+                    'dd MMM yyyy',
+                    {
+                      locale: ptBR,
+                    }
+                  )}
                 </time>
                 <span>
                   <FiUser />
@@ -61,7 +83,15 @@ export default function Home({
         ))}
       </div>
 
-      {next_page && <a className={styles.loadMorePosts}>Carregar mais posts</a>}
+      {posts.next_page && (
+        <button
+          type="button"
+          className={styles.loadMorePosts}
+          onClick={loadMorePosts}
+        >
+          Carregar mais posts
+        </button>
+      )}
     </main>
   );
 }
@@ -78,11 +108,7 @@ export const getStaticProps: GetStaticProps = async () => {
 
   const results = postsResponse.results.map(post => ({
     uid: post.uid,
-    first_publication_date: format(
-      new Date(post.last_publication_date),
-      'dd MMM yyyy',
-      { locale: ptBR }
-    ),
+    first_publication_date: post.first_publication_date,
     data: {
       title: post.data.title,
       subtitle: post.data.subtitle,
